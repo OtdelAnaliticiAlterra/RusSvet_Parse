@@ -3,21 +3,15 @@ import asyncio
 from selectolax.parser import HTMLParser
 import time
 import pandas as pd
-import openpyxl
 import os
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+
 options = Options()
-# options.add_argument("--headless")
-# options.headless = True
 
 from dotenv import load_dotenv, find_dotenv
 from telegram_bot_logger import TgLogger
 from pathlib import Path
-
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -30,6 +24,7 @@ logger = TgLogger(
     token=os.environ.get('LOGGER_BOT_TOKEN'),
     chats_ids_filename=CHATS_IDS,
 )
+
 
 async def get_response(session, url, retries=3):
     """Получение ответа от сервера с обработкой ошибок"""
@@ -49,6 +44,7 @@ async def get_response(session, url, retries=3):
             break
     return None
 
+
 driver = webdriver.Chrome(options=options)
 
 driver.execute_cdp_cmd('Network.setUserAgentOverride', {
@@ -65,8 +61,6 @@ driver.execute_cdp_cmd('Network.setUserAgentOverride', {
 # })
 
 
-
-
 async def parse_categories():
     """Парсинг категорий товаров"""
     catdat = []
@@ -76,7 +70,6 @@ async def parse_categories():
               "https://rs24.ru/search.htm?c=80&ps=16",
               "https://rs24.ru/search.htm?c=2888&ps=16", "https://rs24.ru/search.htm?c=146&ps=16",
               "https://rs24.ru/search.htm?c=194&ps=16", "https://rs24.ru/search.htm?c=30&ps=16"]
-
 
     print(sfacet)
     datass = []
@@ -106,8 +99,6 @@ async def parse_categories():
             data_id = item.attributes.get("data-id")
             results.append(data_id)
 
-
-
             # datass.append(cat.attributes.get('data-id'))
             # for el in cat.css("span.category-head"):
             #     if el.attributes.get("data-id") in links_index:
@@ -119,8 +110,6 @@ async def parse_categories():
     cat_links = [f"https://rs24.ru/search.htm?c={i}&ps=100" for i in set(results)]
     print(cat_links)
     return cat_links
-
-
 
 
 async def parse_products(session):
@@ -141,8 +130,6 @@ async def parse_products(session):
         print(f"elem = {elem}")
         time.sleep(10)
         driver.get(elem)
-
-
 
         # button = WebDriverWait(driver, 100).until(
         #     EC.element_to_be_clickable((By.ID, "infoBannerConfirmBtn"))
@@ -165,7 +152,7 @@ async def parse_products(session):
             if parser.css("div.page-selection__pages-total"):
                 page = [item.text().split(" ")[1] for item in parser.css("div.page-selection__pages-total")]
                 print(f"page: {page}")
-                for num in range(1,int(page[0])+1):
+                for num in range(1, int(page[0]) + 1):
                     print(f"{elem}&p={num}")
                     time.sleep(8)
                     driver.get(f"{elem}&p={num}")
@@ -178,32 +165,31 @@ async def parse_products(session):
 
                     for prod in parser.css("div.search-results__item.js-product.search-results__item_view_list"):
 
+                        if prod.css("div.analytical-category-label.analytical-category-label__out-of-stock"):
 
-                            if prod.css("div.analytical-category-label.analytical-category-label__out-of-stock") :
+                            continue
+                        else:
+                            item = prod.css_first('div.item-name a')
+                            print(f"goodlibks  {'https://rs24.ru' + item.attributes.get('href')}")
 
-                                continue
+                            good_links.append("https://rs24.ru" + item.attributes.get("href"))
+                            print(item.text().split("\n")[1].split("\t\t\t\t\t\t")[1])
+                            name_list.append(item.text().split("\n")[1].split("\t\t\t\t\t\t")[1])
+
+                            # item = prod.css_first('div.single-item-img img')
+                            # print(f"nameLinks {item.attributes.get('alt')}")
+                            # name_list.append(item.attributes.get("alt"))
+
+                            art = prod.css_first("div.item-characteristic-value")
+                            print(f"artlist {art.text()}")
+                            article_list.append(art.text())
+                            pr = prod.css_first("span.price-value.js-product-price")
+                            print(f"piar {pr.text()}")
+                            if "По запросу" in pr.text():
+                                print("no way")
+                                price_list.append(1000)
                             else:
-                                item = prod.css_first('div.item-name a')
-                                print(f"goodlibks  {'https://rs24.ru' + item.attributes.get('href')}")
-
-                                good_links.append("https://rs24.ru" + item.attributes.get("href"))
-                                print(item.text().split("\n")[1].split("\t\t\t\t\t\t")[1])
-                                name_list.append(item.text().split("\n")[1].split("\t\t\t\t\t\t")[1])
-
-                                # item = prod.css_first('div.single-item-img img')
-                                # print(f"nameLinks {item.attributes.get('alt')}")
-                                # name_list.append(item.attributes.get("alt"))
-
-                                art = prod.css_first("div.item-characteristic-value")
-                                print(f"artlist {art.text()}")
-                                article_list.append(art.text())
-                                pr = prod.css_first("span.price-value.js-product-price")
-                                print(f"piar {pr.text()}")
-                                if "По запросу" in  pr.text():
-                                    print("no way")
-                                    price_list.append(1000)
-                                else:
-                                    price_list.append(pr.text().replace("&nbsp;","")[:-1].replace("\xa0",""))
+                                price_list.append(pr.text().replace("&nbsp;", "")[:-1].replace("\xa0", ""))
         else:
             print("no html")
     return good_links, article_list, name_list, price_list
@@ -223,7 +209,6 @@ async def main():
         name_list = [t[2] for t in sct]
         price_list = [t[3] for t in sct]
 
-
         #
         print(len(product_links))
         print(len(article_list))
@@ -231,17 +216,16 @@ async def main():
         print(len(price_list))
 
         new_slovar = {
-                "Код конкурента":  "01-01075397",
-                "Конкурент": "Русский свет",
-                "Артикул": article_list,
-                "Наименование": name_list,
-                "Вид цены": "Цена РусскийСветБарнаул",
-                "Цена": price_list,
-                "Ссылка": product_links
-            }
+            "Код конкурента": "01-01075397",
+            "Конкурент": "Русский свет",
+            "Артикул": article_list,
+            "Наименование": name_list,
+            "Вид цены": "Цена РусскийСветБарнаул",
+            "Цена": price_list,
+            "Ссылка": product_links
+        }
         df = pd.DataFrame(new_slovar)
         file_path = "\\\\tg-storage01\\Аналитический отдел\\Проекты\\Python\\Парсинг конкрунтов\\Выгрузки\\Русский свет\\Выгрузка цен.xlsx"
-
 
         df.to_excel(file_path, sheet_name="Данные", index=False)
         print("Парсинг выполнен")
